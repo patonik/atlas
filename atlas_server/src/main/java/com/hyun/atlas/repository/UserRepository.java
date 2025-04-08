@@ -4,7 +4,9 @@ import com.hyun.atlas.dto.LoginResponseDTO;
 import com.hyun.atlas.dto.UserLoginDTO;
 import com.hyun.atlas.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -36,8 +38,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
             A.COMPANY_CD,
             A.VEND_CD,
             A.PORT_CD,
-            nvl(A.EXP_DT, to_char(sysdate, 'yyyymmdd')),
-            null
+            nvl(A.EXP_DT, to_char(sysdate, 'yyyymmdd'))
         FROM TC_USER_MST A
             LEFT OUTER JOIN (SELECT COMPANY_CD, CODE_CD, CODE_NM FROM TC_CODE_D WHERE CLSS_CD = 'D1') B
                                              ON A.DEPT_CD = B.CODE_CD AND A.COMPANY_CD = B.COMPANY_CD
@@ -47,12 +48,26 @@ public interface UserRepository extends JpaRepository<User, Long> {
     LoginResponseDTO getLoginResponseDTOByCode(String code);
 
     @Query(nativeQuery = true, value = """
-        SELECT nvl(use_ldap,'N'), FN_DECRYPT(USR_PWD), TRY_CNT, EXP_DT, FN_DECRYPT(MAIL_NO), USR_NM
+        SELECT nvl(use_ldap,'N') AS isLdap,
+               FN_DECRYPT(USR_PWD) AS decryptedPassword,
+               TRY_CNT AS attempts,
+               EXP_DT AS expirationDate,
+               FN_DECRYPT(MAIL_NO) AS email,
+               USR_NM AS userName
                 FROM TC_USER_MST
                 WHERE USR_CD  = :code
-                  AND (use_yn IS NULL OR use_yn like 'Y');
+                  AND (use_yn IS NULL OR use_yn like 'Y')
         """)
     Optional<UserLoginDTO> getUserLoginDTOByCode(String code);
 
     User findByCode(String code);
+
+    @Modifying
+    @Query(nativeQuery = true, value = """
+        UPDATE TC_USER_MST
+        SET try_cnt = :attempts
+        WHERE USR_CD = :code
+          AND nvl(use_yn, 'Y') LIKE 'Y'
+        """)
+    void updateByCode(@Param("code") String code, int attempts);
 }

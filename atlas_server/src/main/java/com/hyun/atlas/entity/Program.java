@@ -6,10 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.Nationalized;
-
-import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -71,24 +68,5 @@ public class Program {
     @Nationalized
     @Column(name = "RMK", length = 200)
     private String rmk;
-
-    @Column(name = "INP_USR", length = 30)
-    private String inpUsr;
-
-    @ColumnDefault("sysdate")
-    @Column(name = "INP_YMD")
-    private LocalDate inpYmd;
-
-    @Column(name = "UPD_USR", length = 30)
-    private String updUsr;
-
-    @Column(name = "UPD_YMD")
-    private LocalDate updYmd;
-
-    @Column(name = "SECU_TAG", length = 1)
-    private String secuTag;
-
-    @Column(name = "HMCIS", length = 1)
-    private String hmcis;
 
 }

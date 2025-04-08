@@ -1,9 +1,7 @@
 package com.hyun.atlas.service;
 
 import com.hyun.atlas.dto.LoginRequestDTO;
-import com.hyun.atlas.dto.LoginResponseDTO;
 import com.hyun.atlas.dto.UserLoginDTO;
-import com.hyun.atlas.entity.Driver;
 import com.hyun.atlas.repository.DriverRepository;
 import com.hyun.atlas.repository.UserRepository;
 import jakarta.persistence.EntityManager;
@@ -24,80 +22,63 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final DriverRepository driverRepository;
+    private final JwtUtil jwtUtil;
     @PersistenceContext
     private EntityManager em;
     @Transactional
-    public LoginResponseDTO login(LoginRequestDTO loginRequestDTO) {
-        LoginResponseDTO response = new LoginResponseDTO();
+    public String login(LoginRequestDTO loginRequestDTO) {
         String userCode = loginRequestDTO.getUserCode();
         String systemSite = loginRequestDTO.getSystemSite();
+        String token = "Bearer ";
 
         //driver authentication
-        if (systemSite.equals("DRTD")) {
+        if (systemSite != null && systemSite.equals("DRTD")) {
             String license = driverRepository.getLicenseByLicense(userCode);
             if (license == null) {
-                response.setErrorCode("N");
-                response.setErrorMessage(
-                    "FAIL TO LOGIN GOALS SYSTEM.. \\n PLEASE LOGIN AGAIN, AFTER VERIFY YOUR ID AND PASSWORD!!");
-                return response;
+                return "FAIL TO LOGIN GOALS SYSTEM.. \\n PLEASE LOGIN AGAIN, AFTER VERIFY YOUR ID AND PASSWORD!!";
             }
-            Driver driver = driverRepository.findByLicense(userCode);
-            response.setUserName(driver.getSurname() + " " + driver.getFirstName() + " " + driver.getMiddleName());
-            response.setCompanyCode("HMCIS");
-            response.setRegistrationId(license);
-            response.setUserGroupCode("EXT03");
-            response.setPermissionGroupCode("2006");
-            response.setDepartmentCode("DRV");
-            response.setDepartmentName("driver");
-            response.setCustomerId("HMCIS");
-            response.setLanguage("1039");
-            response.setCompanyCode("HMCIS");
-            response.setVendorCode(driver.getVendorCode());
-            return response;
+            token += jwtUtil.generateToken(userCode);
+            return token;
         }
         // user not found
         Optional<UserLoginDTO> dtoOptional = userRepository.getUserLoginDTOByCode(userCode);
         if (dtoOptional.isEmpty()) {
-            response.setErrorCode("N");
-            response.setErrorMessage("User not found");
-            return response;
+            return "User not found";
         }
         UserLoginDTO userDetails = dtoOptional.get();
         String userPassword = loginRequestDTO.getUserPassword();
         if (userPassword.equals("remind_pwd")) {
             boolean sent = sendPasswordReminder(userCode, userDetails.getDecryptedPassword(), userDetails.getEmail(),
                 userDetails.getUserName(), userDetails.getIsLdap());
-            response.setErrorCode("N");
             if (!sent) {
-                response.setErrorMessage("FAIL TO RESEND PASSWORD - no email!!");
-                return response;
+                return "FAIL TO RESEND PASSWORD - no email!!";
             }
-            response.setErrorMessage("Password sent to mailbox");
-            return response;
+            return "Password sent to mailbox";
         }
 
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
-        LocalDate expirationDate = LocalDate.parse(userDetails.getExpirationDate(), formatter);
-        LocalDate now = LocalDate.now();
-        if (expirationDate.isBefore(now) || expirationDate.equals(now)) {
-            response.setErrorCode("N");
-            response.setErrorMessage("FAILED TO LOGIN - password expired!");
-            return response;
+        String detailsExpirationDate = userDetails.getExpirationDate();
+        if (detailsExpirationDate != null) {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+            LocalDate expirationDate = LocalDate.parse(detailsExpirationDate, formatter);
+            LocalDate now = LocalDate.now();
+            if (expirationDate.isBefore(now) || expirationDate.equals(now)) {
+                return "FAILED TO LOGIN - password expired!";
+            }
         }
-        if (userDetails.getAttempts() > 9) {
-            response.setErrorCode("N");
-            response.setErrorMessage("FAILED TO LOGIN - login attempts exceeded!");
-            return response;
+        int attempts = userDetails.getAttempts();
+        if (attempts > 9) {
+            return "FAILED TO LOGIN - login attempts exceeded!";
         }
         if (userDetails.getIsLdap().equals("Y")) {
             // TODO implement ldap authentication
         }
         if (!userDetails.getDecryptedPassword().equals(userPassword)) {
-            response.setErrorCode("N");
-            response.setErrorMessage("Invalid credentials");
-            return response;
+            attempts++;
+            userRepository.updateByCode(userCode, attempts);
+            return "Invalid credentials";
         }
-        return userRepository.getLoginResponseDTOByCode(userCode);
+        token += jwtUtil.generateToken(userCode);
+        return token;
     }
 
     private boolean sendPasswordReminder(String code, String pass, String email, String name, String isLdap) {

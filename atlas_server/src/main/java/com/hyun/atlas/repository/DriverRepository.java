@@ -16,7 +16,7 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     @Query("""
         SELECT Driver from Driver d
                 where d.license is not null
-                  and fn_russian_to_latin(d.license) = fn_convert_string(:livense)
+                  and fn_russian_to_latin(d.license) = fn_convert_string(:license)
         """)
     Driver findByLicense(String license);
 }
