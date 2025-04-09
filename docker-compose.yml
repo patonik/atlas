@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  atlas-server:
+    build:
+      context: ./atlas_server # Path to Spring Boot project root
+      dockerfile: Dockerfile
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - atlas-network
+
+  atlas-client:
+    build:
+      context: ./atlas-client # Path to Vue.js project root
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    environment:
+      - BACKEND_URL=http://atlas-server:9090 # Proxy target for Nginx
+    depends_on:
+      atlas-server:
+        condition: service_healthy # Wait for backend to be healthy
+    networks:
+      - atlas-network
+
+networks:
+  atlas-network:
+    driver: bridge
